@@ -17,32 +17,78 @@ class r0652717:
         self.distance_matrix = np.loadtxt(file, delimiter=",")
         file.close()
         self.convert_distance()
-        self.iter = 0
+        self.iter = 1
 
         # PARAMETERS
-        init_size = 2000
+        init_size = 1000
+        mu = init_size
+        alpha = int(mu * 0.3)
+        beta = self.iter
+        lambdaa = int(mu * 0.6) - int(mu*0.6)%2
+        print(lambdaa)
+        self.k = int(np.log(self.iter))
+
 
         # Your code here.
-        population = self.init_population(init_size, 200, self.distance_matrix)
+        population = self.init_population(init_size, int(0.7 * self.distance_matrix.shape[0]), self.distance_matrix)
         costs = self.calc_all_cost(population)
 
         test_convergence = True
+        converged = False
         while test_convergence:
-            mean_objective = 0.0
-            best_objective = 0.0
-            best_solution = np.array([1,2,3,4,5])
+
+            if np.std(costs) < 0.00000000001 and np.min(costs)/np.mean(costs) > 0.95:
+                print("converged!")
+                converged = True
+                lambdaa = 0
+                alpha = self.iter
+                beta = int(0.01*mu)
+                self.k = int(np.log(self.iter))
+            else:
+                converged = False
+                mu = init_size
+                alpha = int(mu * 0.3)
+                beta = int(mu*0.02)
+                lambdaa = int(mu * 0.6) - (int(mu*0.6)%2)
+                self.k = int(self.distance_matrix.shape[0] / 4)
+
+            if alpha == 0:
+                alpha = 1
+            if beta == 0:
+                beta = 1
+            if lambdaa == 0:
+                lambdaa = 2
+            if self.k == 0:
+                self.k = 1
+
+            mean_objective = np.mean(costs)
+            best_objective = np.min(costs)
+            best_solution = np.array(population[np.argmin(costs), :])
 
             # Your code here.
+            if not converged:
+                print(lambdaa)
+                parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
+                offspring = self.breed(parents)
 
-            parents = population[self.select_good_individuals(600, costs, replace=False), :]
-            offspring = self.breed(parents)
-            to_mutate = population[self.select_bad_individuals(300, costs, replace=False), :]
-            mutated = self.scrample_batch(to_mutate)
+
+            to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
+            mutated = self.scramble_batch(to_mutate)
+            if converged:
+                mutated = np.apply_along_axis(self.k_opt, 1, mutated)
+
+
+            to_local_search = self.select_good_individuals(beta, costs, replace=False)
+            to_be_improved = population[to_local_search, :]
+            improved = np.apply_along_axis(self.k_opt, 1, to_be_improved)
 
             population, costs = self.add_to_pop(offspring, population, costs)
             population, costs = self.add_to_pop(mutated, population, costs)
+            population, costs = self.add_to_pop(improved, population, costs)
 
-            population, costs = self.eliminate(1000, population, costs)
+            print("pre elim shape: ", population.shape)
+
+            population, costs = self.eliminate(mu, population, costs)
 
             print(population.shape)
             print("Min: ", np.min(costs))
@@ -90,7 +136,7 @@ class r0652717:
     def calc_all_cost(self, routes):
         return np.apply_along_axis(self.calc_cost, 1, routes)
 
-    def scrample_batch(self, routes):
+    def scramble_batch(self, routes):
         return np.apply_along_axis(self.scramble_mutation, 1, routes)
 
     def calc_cost(self, route):
@@ -101,7 +147,7 @@ class r0652717:
         return cost
 
     def scramble_mutation(self, route):
-        randint_one = np.random.randint(0, route.shape[0]-2)
+        randint_one = np.random.randint(1, route.shape[0]-2)
         randint_two = np.random.randint(randint_one+1, route.shape[0] - 1)
         mutated = np.array(route)
         mutated[randint_one : randint_two] = np.random.permutation(mutated[randint_one:randint_two])
@@ -175,12 +221,32 @@ class r0652717:
         costs = np.delete(costs, to_delete, axis=0)
         return population, costs
 
-
     def add_to_pop(self, routes, population, costs):
         new_costs = self.calc_all_cost(routes)
         population = np.concatenate((population, routes))
         costs = np.concatenate((costs, new_costs))
         return population, costs
+
+    def inversion_mut(self, route):
+        indices = np.random.choice(route.shape[0]-1, 2, replace=False)
+        low = np.min(indices) + 1
+        high = np.max(indices) + 1
+
+        flipped = np.array(route)
+        flipped[low:high] = np.flip(route[low:high])
+        return flipped
+
+    def k_opt(self, route):
+        k = self.k
+        k_neighbours = np.empty((k, route.shape[0]), dtype=int)
+
+        for i in range(k):
+            k_neighbours[i, :] = self.inversion_mut(route)
+
+        costs = self.calc_all_cost(k_neighbours)
+        best = np.argmin(costs)
+        return k_neighbours[best, :]
+
 
 
 
