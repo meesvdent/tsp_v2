@@ -11,7 +11,7 @@ class r0652717:
         self.reporter = Reporter.Reporter(self.__class__.__name__)
 
     # The evolutionary algorithm's main loop
-    def optimize(self, filename):
+    def optimize(self, filename, ):
         # Read distance matrix from file.
         file = open(filename)
         self.distance_matrix = np.loadtxt(file, delimiter=",")
@@ -20,10 +20,10 @@ class r0652717:
         self.iter = 1
 
         # PARAMETERS
-        init_size = 1000
+        init_size = 2000
         mu = init_size
         alpha = int(mu * 0.3)
-        beta = self.iter
+        beta = int(np.log(self.iter))
         lambdaa = int(mu * 0.6) - int(mu*0.6)%2
         print(lambdaa)
         self.k = int(np.log(self.iter))
@@ -37,20 +37,20 @@ class r0652717:
         converged = False
         while test_convergence:
 
-            if np.std(costs) < 0.00000000001 and np.min(costs)/np.mean(costs) > 0.95:
-                print("converged!")
-                converged = True
-                lambdaa = 0
-                alpha = self.iter
-                beta = int(0.01*mu)
-                self.k = int(np.log(self.iter))
-            else:
-                converged = False
-                mu = init_size
-                alpha = int(mu * 0.3)
-                beta = int(mu*0.02)
-                lambdaa = int(mu * 0.6) - (int(mu*0.6)%2)
-                self.k = int(self.distance_matrix.shape[0] / 4)
+            # if np.std(costs) < 0.00000000001 and np.min(costs)/np.mean(costs) > 0.95:
+            #     print("converged!")
+            #     converged = True
+            #     lambdaa = 0
+            #     alpha = self.iter
+            #     beta = int(0.01*mu)
+            #     self.k = int(np.log(self.iter))
+            # else:
+            #     converged = False
+            #     mu = init_size
+            #     alpha = int(mu * 0.3)
+            #     beta = int(mu*0.02)
+            #     lambdaa = int(mu * 0.6) - (int(mu*0.6)%2)
+            #     self.k = int(self.distance_matrix.shape[0] / 4)
 
             if alpha == 0:
                 alpha = 1
@@ -104,6 +104,7 @@ class r0652717:
             #  - a 1D numpy array in the cycle notation containing the best solution
             #    with city numbering starting from 0
             time_left = self.reporter.report(mean_objective, best_objective, best_solution)
+            print("Time left: ", time_left)
             if time_left < 0:
                 break
 
@@ -188,7 +189,7 @@ class r0652717:
         ranks[temp] = np.arange(len(costs))
         highest = costs[ranks[-1]]
         alpha = 0.99
-        s = 0.001
+        s = alpha ** (1000)
         a = np.log(s) / (costs.shape[0] - 1)
         exponent = a * ranks
         weights = np.exp(exponent)
@@ -252,7 +253,7 @@ class r0652717:
 
 
 def main():
-    filename = "data/tour250.csv"
+    filename = "data/tour750.csv"
     optimize = r0652717()
     optimize.optimize(filename)
 
