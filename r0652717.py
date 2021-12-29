@@ -6,9 +6,17 @@ from tqdm import tqdm
 # Modify the class name to match your student number.
 class r0652717:
 
-    def __init__(self):
+    def __init__(self, init_size, mu, alpha, beta, lambdaa, init_param, name):
+        self.init_size = init_size
+        self.mu = mu
+        self.alpha = alpha
+        self.beta = beta
+        self.lambdaa = lambdaa
+        self.init_param = init_param
 
-        self.reporter = Reporter.Reporter(self.__class__.__name__)
+
+        self.reporter = Reporter.Reporter(name)
+        self.reporter.write_params(self)
 
     # The evolutionary algorithm's main loop
     def optimize(self, filename, ):
@@ -17,86 +25,84 @@ class r0652717:
         self.distance_matrix = np.loadtxt(file, delimiter=",")
         file.close()
         self.convert_distance()
-        self.iter = 1
+        self.iter = 0
 
         # PARAMETERS
-        init_size = 2000
-        mu = init_size
-        alpha = int(mu * 0.3)
-        beta = int(np.log(self.iter))
-        lambdaa = int(mu * 0.6) - int(mu*0.6)%2
-        print(lambdaa)
-        self.k = int(np.log(self.iter))
+        init_size = self.init_size
+        mu = int(self.mu * init_size)
+        alpha = int(self.alpha * mu)
+        beta = 1
+        lambdaa = int(self.lambdaa * mu) - (int(self.lambdaa * mu) % 2)
+        print("lambdaa", lambdaa)
+        init_param = int(self.distance_matrix.shape[0] * self.init_param)
 
 
         # Your code here.
-        population = self.init_population(init_size, int(0.7 * self.distance_matrix.shape[0]), self.distance_matrix)
+        population = self.init_population(init_size, init_param, self.distance_matrix)
         costs = self.calc_all_cost(population)
+        old_best = 0
+        same = 0
+        mean = []
+        best = []
+        iteration = []
 
         test_convergence = True
         converged = False
         while test_convergence:
 
-            # if np.std(costs) < 0.00000000001 and np.min(costs)/np.mean(costs) > 0.95:
-            #     print("converged!")
-            #     converged = True
-            #     lambdaa = 0
-            #     alpha = self.iter
-            #     beta = int(0.01*mu)
-            #     self.k = int(np.log(self.iter))
-            # else:
-            #     converged = False
-            #     mu = init_size
-            #     alpha = int(mu * 0.3)
-            #     beta = int(mu*0.02)
-            #     lambdaa = int(mu * 0.6) - (int(mu*0.6)%2)
-            #     self.k = int(self.distance_matrix.shape[0] / 4)
-
-            if alpha == 0:
-                alpha = 1
-            if beta == 0:
-                beta = 1
-            if lambdaa == 0:
-                lambdaa = 2
-            if self.k == 0:
-                self.k = 1
+            new_best = np.min(costs)
+            if np.isclose(old_best, new_best):
+                same += 1
+            else:
+                same = 0
+            if same > 200:
+                break
+            old_best = np.copy(new_best)
 
             mean_objective = np.mean(costs)
+            mean.append(mean_objective)
             best_objective = np.min(costs)
+            best.append(best_objective)
             best_solution = np.array(population[np.argmin(costs), :])
+            iteration.append(self.iter)
+            print(self.iter)
+            print(mean_objective)
+            print(best_objective)
+
+            if self.iter % 5 == 0:
+                plt.plot(iteration, mean)
+                plt.plot(iteration, best)
+                plt.show()
 
             # Your code here.
-            if not converged:
-                print(lambdaa)
-                parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
-                offspring = self.breed(parents)
+            if lambdaa > 0:
+                if not converged:
+                    parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
+                    offspring = self.breed(parents)
 
+            # if alpha > 0:
+            #     to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
+            #     mutated = self.scramble_batch(to_mutate)
+            #     if converged:
+            #         mutated = np.apply_along_axis(self.k_opt, 1, mutated)
 
-            to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
-            mutated = self.scramble_batch(to_mutate)
-            if converged:
-                mutated = np.apply_along_axis(self.k_opt, 1, mutated)
+            if beta > 0:
+                to_local_search = self.select_good_individuals(costs=costs, n=beta, replace=False)
+                to_be_improved = population[to_local_search, :]
+                improved = np.apply_along_axis(self.two_opt, 1, to_be_improved)
 
+            if lambdaa > 0:
+                population, costs = self.add_to_pop(offspring, population, costs)
+            # if alpha > 0:
+            #     population, costs = self.add_to_pop(mutated, population, costs)
+            if beta > 0:
+                population, costs = self.add_to_pop(improved, population, costs)
 
-            to_local_search = self.select_good_individuals(beta, costs, replace=False)
-            to_be_improved = population[to_local_search, :]
-            improved = np.apply_along_axis(self.k_opt, 1, to_be_improved)
-
-            population, costs = self.add_to_pop(offspring, population, costs)
-            population, costs = self.add_to_pop(mutated, population, costs)
-            population, costs = self.add_to_pop(improved, population, costs)
-
-            print("pre elim shape: ", population.shape)
 
             population, costs = self.eliminate(mu, population, costs)
 
-            print(population.shape)
-            print("Min: ", np.min(costs))
-            print("Mean: ", np.mean(costs))
 
-            print("LOOP", self.iter)
             self.iter += 1
-
 
             # Call the reporter with:
             #  - the mean objective function value of the population
@@ -104,7 +110,6 @@ class r0652717:
             #  - a 1D numpy array in the cycle notation containing the best solution
             #    with city numbering starting from 0
             time_left = self.reporter.report(mean_objective, best_objective, best_solution)
-            print("Time left: ", time_left)
             if time_left < 0:
                 break
 
@@ -189,7 +194,7 @@ class r0652717:
         ranks[temp] = np.arange(len(costs))
         highest = costs[ranks[-1]]
         alpha = 0.99
-        s = alpha ** (1000)
+        s = alpha ** (500)
         a = np.log(s) / (costs.shape[0] - 1)
         exponent = a * ranks
         weights = np.exp(exponent)
@@ -249,12 +254,35 @@ class r0652717:
         return k_neighbours[best, :]
 
 
+    def two_opt(self, route, cost=None):
+        if cost == None:
+            cost = self.calc_cost(route)
+        for i in range(1, route.shape[0]-1):
+            for j in range(2, route.shape[0]):
+                new_route = self.two_opt_swap(route, i, j)
+                new_cost = self.calc_cost(new_route)
+                if new_cost < cost:
+                    return self.two_opt(new_route, new_cost)
+        return route
+
+    def two_opt_swap(self, route, i, j):
+        new_route = np.array(route)
+        new_route[i:j+1] = np.flip(route[i:j+1])
+        return new_route
 
 
 
 def main():
-    filename = "data/tour750.csv"
-    optimize = r0652717()
+    filename = "data/tour100.csv"
+    optimize = r0652717(
+        init_size=1000,
+        mu=0.5,
+        alpha=0.3,
+        beta=0.000,
+        lambdaa=0.6,
+        init_param=0.8,
+        name="k-opt_test"
+    )
     optimize.optimize(filename)
 
 
