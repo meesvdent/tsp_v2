@@ -20,9 +20,9 @@ class r0652717:
         self.iter = 1
 
         # PARAMETERS
-        init_size = 1000
-        mu = init_size
-        alpha = int(mu * 0.1)
+        init_size = 2000
+        mu = int(0.5 * init_size)
+        alpha = int(mu * 0.02)
         beta = int(mu * 0.01)
         lambdaa = int(mu * 0.6) - int(mu*0.6)%2
         self.k = 10
@@ -38,7 +38,7 @@ class r0652717:
 
 
         # Your code here.
-        population = self.init_population(init_size, int(0.8 * self.distance_matrix.shape[0]), self.distance_matrix)
+        population = self.init_population(init_size, int(0.7 * self.distance_matrix.shape[0]), self.distance_matrix)
         costs = self.calc_all_cost(population)
 
         test_convergence = True
@@ -50,7 +50,7 @@ class r0652717:
             best_objective = np.min(costs)
             best_solution = np.array(population[np.argmin(costs), :])
 
-            if self.iter > 20 and np.allclose(np.array(mean[-10:], dtype=float), np.array(best[-10:], dtype=float)):
+            if self.iter > 20 and np.allclose(np.array(mean[-2:], dtype=float), np.array(best[-2:], dtype=float)):
                 converged = True
                 print("Converged!")
                 lambdaa = int(mu * 0)
@@ -78,12 +78,17 @@ class r0652717:
                 offspring = self.breed(parents)
                 offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.1*offspring.shape[0]), replace=False)
                 offspring[offspring_to_mutate, :] = np.apply_along_axis(self.scramble_mutation, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
                 offspring = np.apply_along_axis(self.k_opt, 1, offspring)
 
             to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
             mutated = self.scramble_batch(to_mutate)
             if converged:
+                mutated = self.scramble_batch(mutated)
+                mutated = self.scramble_batch(mutated)
+                mutated = np.apply_along_axis(self.inversion_mut, 1, mutated)
                 mutated = np.apply_along_axis(self.k_opt, 1, mutated)
+
 
             to_local_search = self.select_good_individuals(beta, costs, replace=False)
             to_be_improved = population[to_local_search, :]
@@ -156,8 +161,9 @@ class r0652717:
         return cost
 
     def scramble_mutation(self, route):
-        randint_one = np.random.randint(1, route.shape[0]-2)
-        randint_two = np.random.randint(randint_one+1, route.shape[0] - 1)
+        indices = np.random.choice(route.shape[0], 2, replace=False)
+        randint_one = np.min(indices)
+        randint_two = np.max(indices)
         mutated = np.array(route)
         mutated[randint_one : randint_two] = np.random.permutation(mutated[randint_one:randint_two])
         return mutated
