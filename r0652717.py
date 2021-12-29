@@ -6,17 +6,9 @@ from tqdm import tqdm
 # Modify the class name to match your student number.
 class r0652717:
 
-    def __init__(self, init_size, mu, alpha, beta, lambdaa, init_param, name):
-        self.init_size = init_size
-        self.mu = mu
-        self.alpha = alpha
-        self.beta = beta
-        self.lambdaa = lambdaa
-        self.init_param = init_param
+    def __init__(self):
 
-
-        self.reporter = Reporter.Reporter(name)
-        self.reporter.write_params(self)
+        self.reporter = Reporter.Reporter(self.__class__.__name__)
 
     # The evolutionary algorithm's main loop
     def optimize(self, filename, ):
@@ -25,84 +17,94 @@ class r0652717:
         self.distance_matrix = np.loadtxt(file, delimiter=",")
         file.close()
         self.convert_distance()
-        self.iter = 0
+        self.iter = 1
 
         # PARAMETERS
-        init_size = self.init_size
-        mu = int(self.mu * init_size)
-        alpha = int(self.alpha * mu)
-        beta = 1
-        lambdaa = int(self.lambdaa * mu) - (int(self.lambdaa * mu) % 2)
-        print("lambdaa", lambdaa)
-        init_param = int(self.distance_matrix.shape[0] * self.init_param)
+        init_size = 1000
+        mu = init_size
+        alpha = int(mu * 0.1)
+        beta = int(mu * 0.01)
+        lambdaa = int(mu * 0.6) - int(mu*0.6)%2
+        self.k = 10
+        if alpha == 0:
+            alpha = 1
+        if beta == 0:
+            beta = 4
+        if lambdaa == 0:
+            lambdaa = 2
+
+        mean = np.array([])
+        best = np.array([])
 
 
         # Your code here.
-        population = self.init_population(init_size, init_param, self.distance_matrix)
+        population = self.init_population(init_size, int(0.8 * self.distance_matrix.shape[0]), self.distance_matrix)
         costs = self.calc_all_cost(population)
-        old_best = 0
-        same = 0
-        mean = []
-        best = []
-        iteration = []
 
         test_convergence = True
         converged = False
         while test_convergence:
 
-            new_best = np.min(costs)
-            if np.isclose(old_best, new_best):
-                same += 1
-            else:
-                same = 0
-            if same > 200:
-                break
-            old_best = np.copy(new_best)
 
             mean_objective = np.mean(costs)
-            mean.append(mean_objective)
             best_objective = np.min(costs)
-            best.append(best_objective)
             best_solution = np.array(population[np.argmin(costs), :])
-            iteration.append(self.iter)
-            print(self.iter)
-            print(mean_objective)
-            print(best_objective)
 
+            if self.iter > 20 and np.allclose(np.array(mean[-10:], dtype=float), np.array(best[-10:], dtype=float)):
+                converged = True
+                print("Converged!")
+                lambdaa = int(mu * 0)
+                alpha = int(mu * 1)
+                beta = 1
+            else:
+                converged = False
+                lambdaa = int(mu * 0.6)
+                alpha = int(mu * 0.01)
+                beta = int(mu * 0.3)
+
+            if mean_objective > 2 * best_objective:
+                mean = np.concatenate((mean, np.array([None])))
+            else:
+                mean = np.concatenate((mean, np.array([mean_objective])))
+            best = np.concatenate((best, np.array([best_objective])))
             if self.iter % 5 == 0:
-                plt.plot(iteration, mean)
-                plt.plot(iteration, best)
+                plt.plot(np.arange(self.iter), mean)
+                plt.plot(np.arange(self.iter), best)
                 plt.show()
 
             # Your code here.
-            if lambdaa > 0:
-                if not converged:
-                    parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
-                    offspring = self.breed(parents)
+            if converged == False:
+                parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
+                offspring = self.breed(parents)
+                offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.1*offspring.shape[0]), replace=False)
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.scramble_mutation, 1, offspring[offspring_to_mutate, :])
+                offspring = np.apply_along_axis(self.k_opt, 1, offspring)
 
-            # if alpha > 0:
-            #     to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
-            #     mutated = self.scramble_batch(to_mutate)
-            #     if converged:
-            #         mutated = np.apply_along_axis(self.k_opt, 1, mutated)
+            to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
+            mutated = self.scramble_batch(to_mutate)
+            if converged:
+                mutated = np.apply_along_axis(self.k_opt, 1, mutated)
 
-            if beta > 0:
-                to_local_search = self.select_good_individuals(costs=costs, n=beta, replace=False)
-                to_be_improved = population[to_local_search, :]
-                improved = np.apply_along_axis(self.two_opt, 1, to_be_improved)
+            to_local_search = self.select_good_individuals(beta, costs, replace=False)
+            to_be_improved = population[to_local_search, :]
+            improved = np.apply_along_axis(self.k_opt, 1, to_be_improved)
 
-            if lambdaa > 0:
+            if not converged:
                 population, costs = self.add_to_pop(offspring, population, costs)
-            # if alpha > 0:
-            #     population, costs = self.add_to_pop(mutated, population, costs)
-            if beta > 0:
-                population, costs = self.add_to_pop(improved, population, costs)
+            population, costs = self.add_to_pop(mutated, population, costs)
+            population, costs = self.add_to_pop(improved, population, costs)
 
+            print("pre elim shape: ", population.shape)
 
             population, costs = self.eliminate(mu, population, costs)
 
+            print(population.shape)
+            print("Min: ", np.min(costs))
+            print("Mean: ", np.mean(costs))
 
+            print("LOOP", self.iter)
             self.iter += 1
+
 
             # Call the reporter with:
             #  - the mean objective function value of the population
@@ -110,6 +112,7 @@ class r0652717:
             #  - a 1D numpy array in the cycle notation containing the best solution
             #    with city numbering starting from 0
             time_left = self.reporter.report(mean_objective, best_objective, best_solution)
+            print("Time left: ", time_left)
             if time_left < 0:
                 break
 
@@ -194,7 +197,7 @@ class r0652717:
         ranks[temp] = np.arange(len(costs))
         highest = costs[ranks[-1]]
         alpha = 0.99
-        s = alpha ** (500)
+        s = alpha ** (1000)
         a = np.log(s) / (costs.shape[0] - 1)
         exponent = a * ranks
         weights = np.exp(exponent)
@@ -253,36 +256,32 @@ class r0652717:
         best = np.argmin(costs)
         return k_neighbours[best, :]
 
-
-    def two_opt(self, route, cost=None):
-        if cost == None:
-            cost = self.calc_cost(route)
-        for i in range(1, route.shape[0]-1):
-            for j in range(2, route.shape[0]):
-                new_route = self.two_opt_swap(route, i, j)
-                new_cost = self.calc_cost(new_route)
-                if new_cost < cost:
-                    return self.two_opt(new_route, new_cost)
-        return route
-
     def two_opt_swap(self, route, i, j):
         new_route = np.array(route)
-        new_route[i:j+1] = np.flip(route[i:j+1])
+        new_route[i:j + 1] = np.flip(route[i:j + 1])
         return new_route
+
+
+    def two_opt(self, route, cost=None, inv_length = 10):
+        if cost is None:
+            cost = self.calc_cost(route)
+        i = np.random.randint(0, route.shape[0] - inv_length)
+        if i + inv_length > route.shape[0]:
+            range_end = route.shape[0]
+        else:
+            range_end = i + inv_length
+        for j in range(i+1, range_end):
+            new_route = self.two_opt_swap(route, i, j)
+            new_cost = self.calc_cost(new_route)
+            if new_cost < cost:
+                return self.two_opt(route, new_cost)
+        return route
 
 
 
 def main():
-    filename = "data/tour100.csv"
-    optimize = r0652717(
-        init_size=1000,
-        mu=0.5,
-        alpha=0.3,
-        beta=0.000,
-        lambdaa=0.6,
-        init_param=0.8,
-        name="k-opt_test"
-    )
+    filename = "data/tour250.csv"
+    optimize = r0652717()
     optimize.optimize(filename)
 
 
