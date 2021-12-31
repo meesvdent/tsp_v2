@@ -76,9 +76,9 @@ class r0652717:
             if converged == False:
                 parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
                 offspring = self.breed(parents)
-                #offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.1*offspring.shape[0]), replace=False)
-                #offspring[offspring_to_mutate, :] = np.apply_along_axis(self.scramble_mutation, 1, offspring[offspring_to_mutate, :])
-                # offspring = np.apply_along_axis(self.k_opt, 1, offspring)
+                offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.01*offspring.shape[0]), replace=False)
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.scramble_mutation, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.k_opt, 1, offspring[offspring_to_mutate, :])
 
             to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
             mutated = self.scramble_batch(to_mutate)
@@ -280,7 +280,7 @@ class r0652717:
 
 
 def main():
-    filename = "data/tour250.csv"
+    filename = "data/tour750.csv"
     optimize = r0652717()
     optimize.optimize(filename)
 
