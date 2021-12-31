@@ -1,4 +1,4 @@
-from r0652717 import r0652717
+from old import r0652717
 
 tours = [
     "29",

@@ -22,9 +22,9 @@ class r0652717:
         # PARAMETERS
         init_size = 2000
         mu = int(0.5 * init_size)
-        alpha = int(mu * 0.02)
-        beta = int(mu * 0.01)
-        lambdaa = int(mu * 0.6) - int(mu*0.6)%2
+        alpha = int(mu * 0.1)
+        beta = int(mu * 0.02)
+        lambdaa = int(mu * 0.6) - int(mu*0.6) % 2
         self.k = 10
         if alpha == 0:
             alpha = 1
@@ -36,10 +36,10 @@ class r0652717:
         mean = np.array([])
         best = np.array([])
 
-
         # Your code here.
-        population = self.init_population(init_size, int(0.7 * self.distance_matrix.shape[0]), self.distance_matrix)
+        population = self.init_population(int(0.5 * init_size), int(0.7 * self.distance_matrix.shape[0]), self.distance_matrix)
         costs = self.calc_all_cost(population)
+
 
         test_convergence = True
         converged = False
@@ -50,17 +50,18 @@ class r0652717:
             best_objective = np.min(costs)
             best_solution = np.array(population[np.argmin(costs), :])
 
+
             if self.iter > 20 and np.allclose(np.array(mean[-2:], dtype=float), np.array(best[-2:], dtype=float)):
-                converged = True
+                converged = False
                 print("Converged!")
-                lambdaa = int(mu * 0)
-                alpha = int(mu * 1)
-                beta = 1
+                # lambdaa = int(mu * 0)
+                # alpha = int(mu * 1)
+                # beta = 1
             else:
                 converged = False
                 lambdaa = int(mu * 0.6)
                 alpha = int(mu * 0.01)
-                beta = int(mu * 0.3)
+                beta = int(mu * 0.05)
 
             if mean_objective > 2 * best_objective:
                 mean = np.concatenate((mean, np.array([None])))
@@ -76,13 +77,15 @@ class r0652717:
             if converged == False:
                 parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
                 offspring = self.breed(parents)
-                offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.1*offspring.shape[0]), replace=False)
+                offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.01*offspring.shape[0]), replace=False)
                 offspring[offspring_to_mutate, :] = np.apply_along_axis(self.scramble_mutation, 1, offspring[offspring_to_mutate, :])
                 offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
                 offspring = np.apply_along_axis(self.k_opt, 1, offspring)
 
-            to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
-            mutated = self.scramble_batch(to_mutate)
+
+            #to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
+            # mutated = self.scramble_batch(to_mutate)
+            # mutated = np.apply_along_axis(self.inversion_mut, 1, mutated)
             if converged:
                 mutated = self.scramble_batch(mutated)
                 mutated = self.scramble_batch(mutated)
@@ -90,14 +93,19 @@ class r0652717:
                 mutated = np.apply_along_axis(self.k_opt, 1, mutated)
 
 
-            to_local_search = self.select_good_individuals(beta, costs, replace=False)
+            to_local_search = self.select_bad_individuals(beta, costs, replace=False)
             to_be_improved = population[to_local_search, :]
             improved = np.apply_along_axis(self.k_opt, 1, to_be_improved)
 
+            golden_boys = self.select_good_individuals(beta, costs, replace=False)
+            golden_boys_improved = population[golden_boys, :]
+            golden_boys_improved = np.apply_along_axis(self.k_opt, 1, golden_boys_improved)
+
             if not converged:
                 population, costs = self.add_to_pop(offspring, population, costs)
-            population, costs = self.add_to_pop(mutated, population, costs)
             population, costs = self.add_to_pop(improved, population, costs)
+            population, costs = self.add_to_pop(golden_boys_improved, population, costs)
+
 
             print("pre elim shape: ", population.shape)
 
@@ -145,7 +153,8 @@ class r0652717:
         return routes
 
     def convert_distance(self):
-        self.distance_matrix[np.where(np.isinf(self.distance_matrix))] = 99999999
+        self.distance_matrix[np.where(np.isinf(self.distance_matrix))] = -1
+        self.distance_matrix[np.where(self.distance_matrix == -1)] = 10 * np.max(self.distance_matrix)
 
     def calc_all_cost(self, routes):
         return np.apply_along_axis(self.calc_cost, 1, routes)
