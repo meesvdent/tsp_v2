@@ -208,12 +208,12 @@ class r0652717:
         return prob
 
     def select_bad_individuals(self, n, costs, replace=True):
-        prob = self.ranked_exp_decay(costs, selection_param=1000, best=False)
+        prob = self.ranked_exp_decay(costs, selection_param=500, best=False)
         selected = np.random.choice(costs.shape[0], size=n, p=prob, replace=replace)
         return selected
 
     def select_good_individuals(self, n, costs, replace=True):
-        prob = self.ranked_exp_decay(costs, selection_param=250, best=True)
+        prob = self.ranked_exp_decay(costs, selection_param=200, best=True)
         selected = np.random.choice(costs.shape[0], size=n, p=prob, replace=replace)
         return selected
 
