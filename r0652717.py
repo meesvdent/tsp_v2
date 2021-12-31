@@ -10,57 +10,91 @@ class r0652717:
 
         self.reporter = Reporter.Reporter(self.__class__.__name__)
 
+        self.init_param = 1000
+        self.mu = self.init_param * 1
+        self.lambdaa = int(0.6 * self.mu)
+        self.alpha = int(0.01  * self.lambdaa)  # percentage of offspring mutated
+        self.beta = int(0.3 * self.mu)  # percentage of local search performed on offspring
+        self.delta = int(0.01 * self.mu) # percentage of mutation performed on population
+        self.k = 10  # number of inversions per local search
+        self.gamma = 0.7 # percentage of goalnodes maximum visible in initialization
+        self.selection_k = 200  # selection for exponential decaying ranking
+        self.elimination_k = 500  # elimination param for exponentional decaying ranking
+
+
     # The evolutionary algorithm's main loop
     def optimize(self, filename, ):
+
         # Read distance matrix from file.
         file = open(filename)
         self.distance_matrix = np.loadtxt(file, delimiter=",")
         file.close()
         self.convert_distance()
-        self.iter = 1
+        self.iter = 0
 
-        # PARAMETERS
-        init_size = 1000
-        mu = init_size
-        alpha = int(mu * 0.1)
-        beta = int(mu * 0.001)
-        lambdaa = int(mu * 0.6) - int(mu*0.6)%2
-        self.k = 10
-        if alpha == 0:
-            alpha = 1
-        if beta == 0:
-            beta = 4
-        if lambdaa == 0:
-            lambdaa = 2
+        self.gamma = int(self.gamma * self.distance_matrix.shape[0])
 
+        # init results array's
         mean = np.array([])
         best = np.array([])
 
 
         # Your code here.
-        population = self.init_population(init_size, int(0.7 * self.distance_matrix.shape[0]), self.distance_matrix)
+        # Init population
+        population = self.init_population(self.init_param, self.gamma, self.distance_matrix)
         costs = self.calc_all_cost(population)
 
         test_convergence = True
         converged = False
-        while test_convergence:
+        while self.convergence_check(best=None):
 
+            # calculate stats
+            mean_objective, best_objective, best_solution = self.calc_stats(costs, population)
 
-            mean_objective = np.mean(costs)
-            best_objective = np.min(costs)
-            best_solution = np.array(population[np.argmin(costs), :])
-
+            # Change parameters is population is converged. Stop breeding and start improving mutated individuals.
             if self.iter > 20 and np.allclose(np.array(mean[-10:], dtype=float), np.array(best[-10:], dtype=float)):
                 converged = True
-                print("Converged!")
-                lambdaa = int(mu * 0)
-                alpha = int(mu * 1)
+                # Turn of breeding
+                lambdaa = int(self.mu * 0)
+                alpha = int(self.mu * 1)
                 beta = 1
             else:
                 converged = False
-                lambdaa = int(mu * 0.6)
-                alpha = int(mu * 0.01)
-                beta = int(mu * 0.3)
+                lambdaa = int(self.mu * self.lambdaa)
+                alpha = int(self.mu * self.alpha)
+                beta = int(self.mu * self.beta)
+
+            # Only perform breeding if not converged
+            if converged == False:
+                parents = population[self.select_good_individuals(self.lambdaa, costs, replace=True), :]
+                offspring = self.breed(parents)
+                offspring_to_mutate = np.random.choice(offspring.shape[0], size=self.alpha, replace=False)
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.k_opt, 1, offspring[offspring_to_mutate, :])
+
+            to_mutate = population[self.select_bad_individuals(self.delta, costs, replace=True), :]
+            mutated = self.scramble_batch(to_mutate)
+            if converged:
+                mutated = np.apply_along_axis(self.k_opt, 1, mutated)
+
+            to_local_search = self.select_good_individuals(self.beta, costs, replace=False)
+            to_be_improved = population[to_local_search, :]
+            improved = np.apply_along_axis(self.k_opt, 1, to_be_improved)
+
+            if not converged:
+                population, costs = self.add_to_pop(offspring, population, costs)
+            population, costs = self.add_to_pop(mutated, population, costs)
+            population, costs = self.add_to_pop(improved, population, costs)
+
+
+            population, costs = self.eliminate(self.mu, population, costs)
+
+            self.iter += 1
+            print(self.iter)
+            print(best_objective)
+            print(mean_objective)
 
             if mean_objective > 2 * best_objective:
                 mean = np.concatenate((mean, np.array([None])))
@@ -71,41 +105,6 @@ class r0652717:
                 plt.plot(np.arange(self.iter), mean)
                 plt.plot(np.arange(self.iter), best)
                 plt.show()
-
-            # Your code here.
-            if converged == False:
-                parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
-                offspring = self.breed(parents)
-                offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.01*offspring.shape[0]), replace=False)
-                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
-                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
-                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
-                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.k_opt, 1, offspring[offspring_to_mutate, :])
-
-            to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
-            mutated = self.scramble_batch(to_mutate)
-            if converged:
-                mutated = np.apply_along_axis(self.k_opt, 1, mutated)
-
-            to_local_search = self.select_good_individuals(beta, costs, replace=False)
-            to_be_improved = population[to_local_search, :]
-            improved = np.apply_along_axis(self.k_opt, 1, to_be_improved)
-
-            if not converged:
-                population, costs = self.add_to_pop(offspring, population, costs)
-            population, costs = self.add_to_pop(mutated, population, costs)
-            population, costs = self.add_to_pop(improved, population, costs)
-
-            print("pre elim shape: ", population.shape)
-
-            population, costs = self.eliminate(mu, population, costs)
-
-            print(population.shape)
-            print("Min: ", np.min(costs))
-            print("Mean: ", np.mean(costs))
-
-            print("LOOP", self.iter)
-            self.iter += 1
 
 
             # Call the reporter with:
@@ -120,6 +119,22 @@ class r0652717:
 
         # Your code here.
         return 0
+
+    def calc_stats(self, costs, population):
+        return np.mean(costs), np.min(costs), np.array(population[np.argmin(costs), :])
+
+    def convergence_check(self, best):
+        if self.iter > 50:
+                return True
+        else:
+            return True
+
+    def showPlot(self, mean, best):
+        if self.iter % 5 == 0:
+            plt.plot(np.arange(self.iter), mean)
+            plt.plot(np.arange(self.iter), best)
+            plt.show()
+
 
     def init_population(self, init_pop_size, k, distance_matrix):
         n_cities = distance_matrix.shape[0]
@@ -210,12 +225,12 @@ class r0652717:
         return prob
 
     def select_bad_individuals(self, n, costs, replace=True):
-        prob = self.ranked_exp_decay(costs, selection_param=500, best=False)
+        prob = self.ranked_exp_decay(costs, selection_param=self.selection_k, best=False)
         selected = np.random.choice(costs.shape[0], size=n, p=prob, replace=replace)
         return selected
 
     def select_good_individuals(self, n, costs, replace=True):
-        prob = self.ranked_exp_decay(costs, selection_param=200, best=True)
+        prob = self.ranked_exp_decay(costs, selection_param=self.elimination_k, best=True)
         selected = np.random.choice(costs.shape[0], size=n, p=prob, replace=replace)
         return selected
 
@@ -282,9 +297,11 @@ class r0652717:
 
 
 def main():
-    filename = "data/tour750.csv"
+    filename = "data/tour250.csv"
     optimize = r0652717()
     optimize.optimize(filename)
+
+
 
 
 if __name__ == "__main__":
