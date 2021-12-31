@@ -77,7 +77,9 @@ class r0652717:
                 parents = population[self.select_good_individuals(lambdaa, costs, replace=True), :]
                 offspring = self.breed(parents)
                 offspring_to_mutate = np.random.choice(offspring.shape[0], size=int(0.01*offspring.shape[0]), replace=False)
-                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.scramble_mutation, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
+                offspring[offspring_to_mutate, :] = np.apply_along_axis(self.inversion_mut, 1, offspring[offspring_to_mutate, :])
                 offspring[offspring_to_mutate, :] = np.apply_along_axis(self.k_opt, 1, offspring[offspring_to_mutate, :])
 
             to_mutate = population[self.select_bad_individuals(alpha, costs, replace=True), :]
